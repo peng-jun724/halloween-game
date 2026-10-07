@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>萬聖節快手 Halloween Blitz</title>
+    <style>
+        body { font-family: 'Comic Sans MS', cursive, sans-serif; text-align: center; background-color: #2c3e50; color: white; user-select: none; }
+        #game-board { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 50px; }
+        
+        /* 卡片樣式 */
+        .card { 
+            width: 180px; 
+            height: 180px; 
+            border-radius: 20px; 
+            border: 5px solid #fff; 
+            background-color: #ecf0f1; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            cursor: pointer; 
+            transition: transform 0.1s; 
+            overflow: hidden;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+        }
+        .card:active { transform: scale(0.95); }
+        .card img { width: 90%; height: 90%; object-fit: contain; }
+
+        .score-board { font-size: 30px; margin: 20px; color: #f1c40f; }
+        #mic-btn { background-color: #e74c3c; color: white; border: none; padding: 15px 30px; font-size: 20px; border-radius: 10px; cursor: pointer; margin-top: 20px; }
+        #message { height: 40px; font-size: 24px; color: #2ecc71; font-weight: bold; margin-top: 20px;}
+    </style>
+</head>
+<body>
+
+    <h1>萬聖節快手 🎃</h1>
+    <div class="score-board">分數: <span id="score">0</span></div>
+    
+    <!-- 遊戲卡片顯示區 -->
+    <div id="game-board"></div>
+
+    <div id="message"></div>
+
+    <!-- 語音辨識按鈕 -->
+    <button id="mic-btn" onclick="toggleMic()">🎤 開啟語音辨識</button>
+
+<script>
+    // 1. 正確卡片清單 (共4種)
+    const correctCards = [
+        { id: 'ghost', src: 'ghost_white.png' },
+        { id: 'vampire', src: 'vampire_green.png' },
+        { id: 'jack', src: 'jack_orange.png' },
+        { id: 'witch', src: 'witch_blue.png' }
+    ];
+
+    // 2. 錯誤卡片清單 (建議每個角色至少準備1~2張錯誤顏色的圖)
+    // 這裡我補齊了4個角色的錯誤範例，避免抽牌時不夠用
+    const wrongCards = [
+        { id: 'ghost', src: 'ghost__blue.png' },
+        { id: 'ghost', src: 'ghost_orange.png' },
+        { id: 'ghost', src: 'ghost_purple.png' },
+        { id: 'ghost', src: 'ghost_green.png' },
+        { id: 'vampire', src: 'vampire_blue.png' },
+        { id: 'vampire', src: 'vampire_orange.png' },
+        { id: 'vampire', src: 'vampire_purple.png' },
+        { id: 'vampire', src: 'vampire_white.png' },
+        { id: 'witch', src: 'witch_white.png' },
+        { id: 'witch', src: 'witch_orange.png' },
+        { id: 'witch', src: 'witch_purple.png' },
+        { id: 'witch', src: 'witch_green.png' } // 新增一個南瓜的錯誤圖檔
+    ];
+
+    let score = 0;
+    let currentCorrectChar = '';
+
+    function getRandomInt(max) { return Math.floor(Math.random() * max); }
+
+    function generateQuestion() {
+        const board = document.getElementById('game-board');
+        board.innerHTML = ''; 
+
+        // 步驟 A：隨機抽取 1 張「正確」的卡片
+        let correctIndex = getRandomInt(correctCards.length);
+        let correctCardInfo = correctCards[correctIndex];
+        currentCorrectChar = correctCardInfo.id; // 記錄這題的正確答案
+
+        // 步驟 B：從錯誤卡片中，過濾掉與正確卡片同角色的圖 (避免畫面上出現兩隻幽靈)
+        let availableWrongCards = wrongCards.filter(card => card.id !== correctCardInfo.id);
+
+        // 步驟 C：把剩下的錯誤卡片洗牌，然後抽出前 2 張
+        availableWrongCards.sort(() => Math.random() - 0.5);
+        let wrongCard1 = availableWrongCards[0];
+        let wrongCard2 = availableWrongCards[1];
+
+        // 步驟 D：把 1張正確 + 2張錯誤 組合在一起，並再次洗牌打亂左中右順序
+        let cardsToShow = [correctCardInfo, wrongCard1, wrongCard2];
+        cardsToShow.sort(() => Math.random() - 0.5);
+
+        // 將這 3 張圖片渲染到網頁上
+        cardsToShow.forEach(card => {
+            let div = document.createElement('div');
+            div.className = 'card';
+            
+            let img = document.createElement('img');
+            img.src = card.src; 
+            
+            div.appendChild(img);
+            
+            // 點擊事件
+            div.onclick = () => checkAnswer(card.id);
+            board.appendChild(div);
+        });
+    }
+
+    function checkAnswer(selectedId) {
+        const msg = document.getElementById('message');
+        if (selectedId === currentCorrectChar) {
+            score += 100;
+            msg.innerText = "Bingo! 抓對了！";
+            msg.style.color = "#2ecc71";
+            setTimeout(generateQuestion, 1000); 
+        } else {
+            msg.innerText = "Oops! 抓錯人了！扣 50 分";
+            msg.style.color = "#e74c3c";
+            score -= 50; 
+        }
+        document.getElementById('score').innerText = score;
+    }
+
+    // --- 語音辨識部分 ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let isListening = false;
+
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US'; 
+        recognition.continuous = true;
+        recognition.interimResults = false;
+
+        recognition.onresult = function(event) {
+            const last = event.results.length - 1;
+            const spokenWord = event.results[last][0].transcript.toLowerCase().trim();
+            
+            if (spokenWord.includes('ghost')) checkAnswer('ghost');
+            else if (spokenWord.includes('vampire')) checkAnswer('vampire');
+            else if (spokenWord.includes('jack') || spokenWord.includes('pumpkin')) checkAnswer('jack');
+            else if (spokenWord.includes('witch')) checkAnswer('witch');
+        };
+    } else {
+        alert("您的瀏覽器不支援語音辨識，請使用 Chrome 瀏覽器。");
+    }
+
+    function toggleMic() {
+        if (!recognition) return;
+        const btn = document.getElementById('mic-btn');
+        if (isListening) {
+            recognition.stop();
+            btn.innerText = "🎤 開啟語音辨識";
+            btn.style.backgroundColor = "#e74c3c";
+            isListening = false;
+        } else {
+            recognition.start();
+            btn.innerText = "🔴 聽音中... 請喊出角色英文";
+            btn.style.backgroundColor = "#2ecc71";
+            isListening = true;
+        }
+    }
+
+    generateQuestion();
+</script>
+</body>
+</html>
